@@ -104,6 +104,20 @@ function tick(dt)
     if console.visible then
         handleInput()
     end
+
+    -- Handle mouse wheel scrolling when console is visible
+    if console.visible then
+        local wheel = InputValue and InputValue("mousewheel") or 0
+        if wheel > 0 then
+            local maxLines = math.floor((console.height - 60) / (console.fontSize + 2))
+            local maxScroll = math.max(0, #console.logs - maxLines)
+            console.scroll = math.min(maxScroll, console.scroll + 1)  -- Scroll up (show later logs)
+        elseif wheel < 0 then
+            local maxLines = math.floor((console.height - 60) / (console.fontSize + 2))
+            local maxScroll = math.max(0, #console.logs - maxLines)
+            console.scroll = math.max(0, console.scroll - 1)  -- Scroll down (show earlier logs)
+        end
+    end
 end
 
 -- Draw the console overlay
