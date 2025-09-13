@@ -17,7 +17,7 @@ console = {
     keybind = "~",
     opacity = 0.8,
     width = 800,
-    height = 400,
+    height = 600,
     fontSize = 20
 }
 
@@ -111,11 +111,11 @@ function tick(dt)
         if wheel > 0 then
             local maxLines = math.floor((console.height - 60) / (console.fontSize + 2))
             local maxScroll = math.max(0, #console.logs - maxLines)
-            console.scroll = math.min(maxScroll, console.scroll + 1)  -- Scroll up (show later logs)
+            console.scroll = math.min(maxScroll, console.scroll + 2)  -- Scroll up (show later logs)
         elseif wheel < 0 then
             local maxLines = math.floor((console.height - 60) / (console.fontSize + 2))
             local maxScroll = math.max(0, #console.logs - maxLines)
-            console.scroll = math.max(0, console.scroll - 1)  -- Scroll down (show earlier logs)
+            console.scroll = math.max(0, console.scroll - 2)  -- Scroll down (show earlier logs)
         end
     end
 end

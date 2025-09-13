@@ -33,7 +33,7 @@ A comprehensive interactive console overlay for Teardown that provides debugging
 - **Command History**: Use Up/Down arrow keys to navigate history
 - **Text Editing**: Use Left/Right arrows to move cursor, Backspace/Delete to edit
 - **Tab Completion**: Press Tab to auto-complete API function names
-- **Scroll Output**: Use mouse wheel to scroll log output up/down
+- **Scroll Output**: Use mouse wheel to scroll log output up/down (2 lines per wheel event)
 
 ### Available Commands
 
