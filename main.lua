@@ -971,9 +971,14 @@ function drawConsole()
             UiFont("regular.ttf", console.fontSize)
             UiColor(1, 1, 1, 1)
             
+            -- Draw the prompt
+            UiText("> ")
+            
             -- Use UiTextInput for automatic text input handling
             if UiTextInput then
-                local inputWidth = console.width - 20
+                local promptWidth = UiGetTextWidth and UiGetTextWidth("> ") or (2 * console.fontSize * 0.6)
+                UiTranslate(promptWidth-10, -16) -- Position after the prompt, adjusted for vertical alignment
+                local inputWidth = console.width - 20 - promptWidth
                 local inputHeight = console.fontSize + 4
                 local newText = UiTextInput(console.input, inputWidth, inputHeight, console.visible, false)
                 if newText ~= console.input then
@@ -981,20 +986,11 @@ function drawConsole()
                     console.cursor = #console.input
                     console.completionMatches = nil
                 end
-                
-                -- Draw the prompt and input
-                UiText("> " .. console.input)
-                
-                -- Draw cursor at end (UiTextInput handles its own cursor)
-                local cursorX = UiGetTextWidth and UiGetTextWidth("> " .. console.input) or 
-                               (#("> " .. console.input) * (console.fontSize * 0.6))
-                UiTranslate(cursorX, 0)
-                UiRect(2, console.fontSize)
             else
                 -- Fallback for environments without UiTextInput
-                UiText("> " .. console.input)
-                local cursorX = UiGetTextWidth and UiGetTextWidth("> " .. console.input:sub(1, console.cursor)) or
-                               (#("> " .. console.input:sub(1, console.cursor)) * (console.fontSize * 0.6))
+                UiText(console.input)
+                local cursorX = UiGetTextWidth and UiGetTextWidth(console.input:sub(1, console.cursor)) or
+                               (#(console.input:sub(1, console.cursor)) * (console.fontSize * 0.6))
                 UiTranslate(cursorX, 0)
                 UiRect(2, console.fontSize)
             end
