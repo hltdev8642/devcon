@@ -1,0 +1,4 @@
+name = Lua Console Overlay Mod
+author = GitHub Copilot
+description = Interactive Lua console overlay for Teardown with debugging, scripting, and registry management features.
+tags = Gameplay
