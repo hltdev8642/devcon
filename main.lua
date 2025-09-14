@@ -21,6 +21,20 @@ console = {
     fontSize = 20
 }
 
+-- Helper function to check if a value exists in a table
+local function has_value(tab, val)
+    for index, value in ipairs(tab) do
+        if value == val then
+            return true
+        end
+    end
+    return false
+end
+
+-- Global variables for level body filtering
+global = global or {}
+global.levelBodies = global.levelBodies or {}
+
 -- Laser tool variables
 local laserTool = {
     selectedBody = 0,
@@ -43,6 +57,23 @@ function init()
     if RegisterTool then
         RegisterTool("laserpointer", "Laser Pointer", "lasertool/laserpointer.vox")
         SetBool("game.tool.laserpointer.enabled", true)
+    end
+    
+    -- Initialize level bodies for filtering
+    if FindBodies then
+        local allBodies = FindBodies(nil, true) or {}
+        for _, body in ipairs(allBodies) do
+            if not IsBodyDynamic(body) then
+                local voxelCount = 0
+                local shapes = GetBodyShapes(body) or {}
+                for _, shape in ipairs(shapes) do
+                    voxelCount = voxelCount + (GetShapeVoxelCount(shape) or 0)
+                end
+                if voxelCount >= 10000000 then
+                    table.insert(global.levelBodies, body)
+                end
+            end
+        end
     end
     
     if DebugPrint then
@@ -202,34 +233,64 @@ function handleLaserTool(dt)
         -- Get the body that contains this shape
         local body = GetShapeBody(shape)
 
-        -- Handle tool usage (click to select)
-        if InputPressed and InputPressed("usetool") then
-            -- Clear previous selection
-            if laserTool.selectedBody ~= 0 then
-                DrawBodyOutline(laserTool.selectedBody, 0) -- Remove outline
+        if not has_value(global.levelBodies, body) then
+            -- Body context: work with selectable body
+            -- Handle tool usage (click to select)
+            if InputPressed and InputPressed("usetool") then
+                -- Clear previous selection
+                if laserTool.selectedBody ~= 0 then
+                    DrawBodyOutline(laserTool.selectedBody, 0) -- Remove outline
+                end
+
+                -- Select new object
+                laserTool.selectedBody = body
+                laserTool.selectedShape = shape
+
+                -- Store selection in registry for console access
+                SetInt("lasertool.selected_body", body)
+                SetInt("lasertool.selected_shape", shape)
+
+                -- Add red outline to selected body
+                DrawBodyOutline(body, laserTool.outlineColor[4])
             end
 
-            -- Select new object
-            laserTool.selectedBody = body
-            laserTool.selectedShape = shape
+            -- Draw outline on currently aimed body
+            if body ~= laserTool.selectedBody then
+                DrawBodyOutline(body, laserTool.outlineColor[4])
+            end
+        else
+            -- Shape context: fallback to shape selection for level bodies
+            -- Handle tool usage (click to select)
+            if InputPressed and InputPressed("usetool") then
+                -- Clear previous selection
+                if laserTool.selectedBody ~= 0 then
+                    DrawBodyOutline(laserTool.selectedBody, 0) -- Remove outline
+                end
 
-            -- Store selection in registry for console access
-            SetInt("lasertool.selected_body", body)
-            SetInt("lasertool.selected_shape", shape)
+                -- Select shape instead of body
+                laserTool.selectedBody = 0  -- Clear body selection
+                laserTool.selectedShape = shape
 
-            -- Add red outline to selected body
-            DrawBodyOutline(body, laserTool.outlineColor[4])
-        end
+                -- Store selection in registry for console access
+                SetInt("lasertool.selected_body", 0)
+                SetInt("lasertool.selected_shape", shape)
 
-        -- Draw outline on currently aimed body
-        if body ~= laserTool.selectedBody then
-            DrawBodyOutline(body, laserTool.outlineColor[4])
+                -- Add red outline to selected shape
+                DrawShapeOutline(shape, laserTool.outlineColor[1], laserTool.outlineColor[2], laserTool.outlineColor[3], laserTool.outlineColor[4])
+            end
+
+            -- Draw outline on currently aimed shape
+            if shape ~= laserTool.selectedShape then
+                DrawShapeOutline(shape, laserTool.outlineColor[1], laserTool.outlineColor[2], laserTool.outlineColor[3], laserTool.outlineColor[4])
+            end
         end
     end
 
     -- Keep selected object outlined
     if laserTool.selectedBody ~= 0 then
         DrawBodyOutline(laserTool.selectedBody, laserTool.outlineColor[4])
+    elseif laserTool.selectedShape ~= 0 then
+        DrawShapeOutline(laserTool.selectedShape, laserTool.outlineColor[1], laserTool.outlineColor[2], laserTool.outlineColor[3], laserTool.outlineColor[4])
     end
 end
 
