@@ -85,7 +85,7 @@ end
 -- Main update loop
 function tick(dt)
     -- Handle console toggle
-    if InputPressed and InputPressed("f7") then
+    if InputPressed and InputPressed("home") then
         console.visible = not console.visible
         if not console.visible then
             saveSession()
@@ -2090,24 +2090,62 @@ function dumpSelectedObject()
 
     addLog("INFO", "=== SELECTED OBJECT DEBUG INFO ===")
 
+    -- General info
+    if GetPlayerPos then
+        local playerPos = GetPlayerPos()
+        if playerPos and playerPos.x and playerPos.y and playerPos.z then
+            addLog("INFO", "Player Position: (" .. string.format("%.2f", playerPos.x) .. ", " .. string.format("%.2f", playerPos.y) .. ", " .. string.format("%.2f", playerPos.z) .. ")")
+        end
+    end
+
     if selectedBody ~= 0 then
         addLog("INFO", "Body Handle: " .. selectedBody)
 
+        -- Transform info
         if GetBodyTransform then
             local transform = GetBodyTransform(selectedBody)
-            if transform and transform.pos then
-                addLog("INFO", "Body Position: (" .. (transform.pos.x or 0) .. ", " .. (transform.pos.y or 0) .. ", " .. (transform.pos.z or 0) .. ")")
+            if transform and transform.pos and transform.pos.x and transform.pos.y and transform.pos.z then
+                addLog("INFO", "Body Position: (" .. string.format("%.2f", transform.pos.x) .. ", " .. string.format("%.2f", transform.pos.y) .. ", " .. string.format("%.2f", transform.pos.z) .. ")")
             end
-            if transform and transform.rot then
-                addLog("INFO", "Body Rotation: (" .. (transform.rot.x or 0) .. ", " .. (transform.rot.y or 0) .. ", " .. (transform.rot.z or 0) .. ", " .. (transform.rot.w or 0) .. ")")
+            if transform and transform.rot and transform.rot.x and transform.rot.y and transform.rot.z and transform.rot.w then
+                addLog("INFO", "Body Rotation: (" .. string.format("%.3f", transform.rot.x) .. ", " .. string.format("%.3f", transform.rot.y) .. ", " .. string.format("%.3f", transform.rot.z) .. ", " .. string.format("%.3f", transform.rot.w) .. ")")
             end
         end
 
+        -- Physics properties
         if GetBodyMass then
             local mass = GetBodyMass(selectedBody)
-            addLog("INFO", "Body Mass: " .. mass)
+            if mass then
+                addLog("INFO", "Body Mass: " .. string.format("%.2f", mass) .. " kg")
+            else
+                addLog("INFO", "Body Mass: N/A")
+            end
         end
 
+        if GetBodyVelocity then
+            local vel = GetBodyVelocity(selectedBody)
+            if vel and vel.x and vel.y and vel.z then
+                local speed = math.sqrt(vel.x*vel.x + vel.y*vel.y + vel.z*vel.z)
+                addLog("INFO", "Body Velocity: (" .. string.format("%.2f", vel.x) .. ", " .. string.format("%.2f", vel.y) .. ", " .. string.format("%.2f", vel.z) .. ") [" .. string.format("%.2f", speed) .. " m/s]")
+            end
+        end
+
+        if GetBodyAngularVelocity then
+            local angVel = GetBodyAngularVelocity(selectedBody)
+            if angVel and angVel.x and angVel.y and angVel.z then
+                local angSpeed = math.sqrt(angVel.x*angVel.x + angVel.y*angVel.y + angVel.z*angVel.z)
+                addLog("INFO", "Body Angular Velocity: (" .. string.format("%.2f", angVel.x) .. ", " .. string.format("%.2f", angVel.y) .. ", " .. string.format("%.2f", angVel.z) .. ") [" .. string.format("%.2f", angSpeed) .. " rad/s]")
+            end
+        end
+
+        if GetBodyCenterOfMass then
+            local com = GetBodyCenterOfMass(selectedBody)
+            if com and com.x and com.y and com.z then
+                addLog("INFO", "Center of Mass: (" .. string.format("%.2f", com.x) .. ", " .. string.format("%.2f", com.y) .. ", " .. string.format("%.2f", com.z) .. ")")
+            end
+        end
+
+        -- State info
         if IsBodyDynamic then
             local isDynamic = IsBodyDynamic(selectedBody)
             addLog("INFO", "Is Dynamic: " .. tostring(isDynamic))
@@ -2123,11 +2161,64 @@ function dumpSelectedObject()
             addLog("INFO", "Is Broken: " .. tostring(isBroken))
         end
 
+        if IsBodyVisible then
+            local isVisible = IsBodyVisible(selectedBody)
+            addLog("INFO", "Is Visible: " .. tostring(isVisible))
+        end
+
+        -- Bounds and shapes
         if GetBodyBounds then
             local min, max = GetBodyBounds(selectedBody)
-            if min and max then
-                addLog("INFO", "Bounds Min: (" .. (min.x or 0) .. ", " .. (min.y or 0) .. ", " .. (min.z or 0) .. ")")
-                addLog("INFO", "Bounds Max: (" .. (max.x or 0) .. ", " .. (max.y or 0) .. ", " .. (max.z or 0) .. ")")
+            if min and max and min.x and min.y and min.z and max.x and max.y and max.z then
+                addLog("INFO", "Bounds Min: (" .. string.format("%.2f", min.x) .. ", " .. string.format("%.2f", min.y) .. ", " .. string.format("%.2f", min.z) .. ")")
+                addLog("INFO", "Bounds Max: (" .. string.format("%.2f", max.x) .. ", " .. string.format("%.2f", max.y) .. ", " .. string.format("%.2f", max.z) .. ")")
+                local size = {x = max.x - min.x, y = max.y - min.y, z = max.z - min.z}
+                addLog("INFO", "Bounds Size: (" .. string.format("%.2f", size.x) .. ", " .. string.format("%.2f", size.y) .. ", " .. string.format("%.2f", size.z) .. ")")
+            end
+        end
+
+        if GetBodyShapes then
+            local shapes = GetBodyShapes(selectedBody) or {}
+            addLog("INFO", "Shape Count: " .. #shapes)
+            if #shapes > 0 then
+                local totalVoxels = 0
+                for _, shape in ipairs(shapes) do
+                    if GetShapeVoxelCount then
+                        totalVoxels = totalVoxels + (GetShapeVoxelCount(shape) or 0)
+                    end
+                end
+                addLog("INFO", "Total Voxels: " .. totalVoxels)
+            end
+        end
+
+        -- Vehicle info
+        if GetBodyVehicle then
+            local vehicle = GetBodyVehicle(selectedBody)
+            if vehicle and vehicle ~= 0 then
+                addLog("INFO", "Vehicle Handle: " .. vehicle)
+                if GetVehicleHealth then
+                    local health = GetVehicleHealth(vehicle)
+                    if health then
+                        addLog("INFO", "Vehicle Health: " .. string.format("%.1f", health))
+                    else
+                        addLog("INFO", "Vehicle Health: N/A")
+                    end
+                end
+            end
+        end
+
+        -- Tags and description
+        if GetDescription then
+            local desc = GetDescription(selectedBody)
+            if desc and desc ~= "" then
+                addLog("INFO", "Description: " .. desc)
+            end
+        end
+
+        if ListTags then
+            local tags = ListTags(selectedBody) or {}
+            if #tags > 0 then
+                addLog("INFO", "Tags: " .. table.concat(tags, ", "))
             end
         end
     end
@@ -2135,20 +2226,42 @@ function dumpSelectedObject()
     if selectedShape ~= 0 then
         addLog("INFO", "Shape Handle: " .. selectedShape)
 
-        if GetShapeWorldTransform then
-            local transform = GetShapeWorldTransform(selectedShape)
-            if transform and transform.pos then
-                addLog("INFO", "Shape Position: (" .. (transform.pos.x or 0) .. ", " .. (transform.pos.y or 0) .. ", " .. (transform.pos.z or 0) .. ")")
-            end
-            if transform and transform.rot then
-                addLog("INFO", "Shape Rotation: (" .. (transform.rot.x or 0) .. ", " .. (transform.rot.y or 0) .. ", " .. (transform.rot.z or 0) .. ", " .. (transform.rot.w or 0) .. ")")
+        -- Parent body
+        if GetShapeBody then
+            local body = GetShapeBody(selectedShape)
+            if body and body ~= 0 then
+                addLog("INFO", "Parent Body: " .. body)
             end
         end
 
+        -- Transform info
+        if GetShapeWorldTransform then
+            local transform = GetShapeWorldTransform(selectedShape)
+            if transform and transform.pos and transform.pos.x and transform.pos.y and transform.pos.z then
+                addLog("INFO", "Shape Position: (" .. string.format("%.2f", transform.pos.x) .. ", " .. string.format("%.2f", transform.pos.y) .. ", " .. string.format("%.2f", transform.pos.z) .. ")")
+            end
+            if transform and transform.rot and transform.rot.x and transform.rot.y and transform.rot.z and transform.rot.w then
+                addLog("INFO", "Shape Rotation: (" .. string.format("%.3f", transform.rot.x) .. ", " .. string.format("%.3f", transform.rot.y) .. ", " .. string.format("%.3f", transform.rot.z) .. ", " .. string.format("%.3f", transform.rot.w) .. ")")
+            end
+        end
+
+        if GetShapeLocalTransform then
+            local transform = GetShapeLocalTransform(selectedShape)
+            if transform and transform.pos and transform.pos.x and transform.pos.y and transform.pos.z then
+                addLog("INFO", "Local Position: (" .. string.format("%.2f", transform.pos.x) .. ", " .. string.format("%.2f", transform.pos.y) .. ", " .. string.format("%.2f", transform.pos.z) .. ")")
+            end
+            if transform and transform.rot and transform.rot.x and transform.rot.y and transform.rot.z and transform.rot.w then
+                addLog("INFO", "Local Rotation: (" .. string.format("%.3f", transform.rot.x) .. ", " .. string.format("%.3f", transform.rot.y) .. ", " .. string.format("%.3f", transform.rot.z) .. ", " .. string.format("%.3f", transform.rot.w) .. ")")
+            end
+        end
+
+        -- Size and voxels
         if GetShapeSize then
             local size = GetShapeSize(selectedShape)
             if type(size) == "table" and size.x and size.y and size.z then
                 addLog("INFO", "Shape Size: " .. size.x .. "x" .. size.y .. "x" .. size.z)
+                local volume = size.x * size.y * size.z
+                addLog("INFO", "Shape Volume: " .. volume .. " voxels")
             elseif type(size) == "number" then
                 addLog("INFO", "Shape Size: " .. size)
             else
@@ -2156,14 +2269,122 @@ function dumpSelectedObject()
             end
         end
 
+        if GetShapeVoxelCount then
+            local voxels = GetShapeVoxelCount(selectedShape)
+            if voxels then
+                addLog("INFO", "Voxel Count: " .. voxels)
+            else
+                addLog("INFO", "Voxel Count: N/A")
+            end
+        end
+
+        -- Materials
+        if GetShapeMaterial then
+            local material = GetShapeMaterial(selectedShape)
+            if material then
+                addLog("INFO", "Primary Material: " .. material)
+            end
+        end
+
         if GetShapeMaterialAtIndex then
-            local mat = GetShapeMaterialAtIndex(selectedShape, 0, 0, 0)
-            addLog("INFO", "Primary Material: " .. mat)
+            -- Sample materials at different positions
+            local size = GetShapeSize and GetShapeSize(selectedShape)
+            if type(size) == "table" and size.x and size.y and size.z then
+                local centerX, centerY, centerZ = math.floor(size.x/2), math.floor(size.y/2), math.floor(size.z/2)
+                local matCenter = GetShapeMaterialAtIndex(selectedShape, centerX, centerY, centerZ)
+                local matCorner = GetShapeMaterialAtIndex(selectedShape, 0, 0, 0)
+                addLog("INFO", "Material (Center): " .. (matCenter or "none"))
+                addLog("INFO", "Material (Corner): " .. (matCorner or "none"))
+            end
+        end
+
+        -- Physics properties
+        if GetShapeDensity then
+            local density = GetShapeDensity(selectedShape)
+            if density then
+                addLog("INFO", "Density: " .. string.format("%.2f", density))
+            else
+                addLog("INFO", "Density: N/A")
+            end
+        end
+
+        if GetShapeEmissiveScale then
+            local emissive = GetShapeEmissiveScale(selectedShape)
+            if emissive and emissive > 0 then
+                addLog("INFO", "Emissive Scale: " .. string.format("%.2f", emissive))
+            end
+        end
+
+        -- State info
+        if IsShapeVisible then
+            local isVisible = IsShapeVisible(selectedShape)
+            addLog("INFO", "Is Visible: " .. tostring(isVisible))
         end
 
         if IsShapeBroken then
             local isBroken = IsShapeBroken(selectedShape)
-            addLog("INFO", "Shape Is Broken: " .. tostring(isBroken))
+            addLog("INFO", "Is Broken: " .. tostring(isBroken))
+        end
+
+        if IsShapeDisconnected then
+            local isDisconnected = IsShapeDisconnected(selectedShape)
+            addLog("INFO", "Is Disconnected: " .. tostring(isDisconnected))
+        end
+
+        if IsStaticShapeDetached then
+            local isDetached = IsStaticShapeDetached(selectedShape)
+            addLog("INFO", "Is Detached: " .. tostring(isDetached))
+        end
+
+        -- Collision and joints
+        if GetShapeCollisionFilter then
+            local filter = GetShapeCollisionFilter(selectedShape)
+            addLog("INFO", "Collision Filter: " .. filter)
+        end
+
+        if GetShapeJoints then
+            local joints = GetShapeJoints(selectedShape) or {}
+            addLog("INFO", "Joint Count: " .. #joints)
+            if #joints > 0 then
+                for i, joint in ipairs(joints) do
+                    if GetJointType then
+                        local jointType = GetJointType(joint)
+                        addLog("INFO", "  Joint " .. i .. ": " .. joint .. " (Type: " .. jointType .. ")")
+                    end
+                end
+            end
+        end
+
+        -- Lights and screens
+        if GetShapeLights then
+            local lights = GetShapeLights(selectedShape) or {}
+            addLog("INFO", "Light Count: " .. #lights)
+        end
+
+        -- Distance from player
+        if GetPlayerPos and GetShapeWorldTransform then
+            local playerPos = GetPlayerPos()
+            local shapeTransform = GetShapeWorldTransform(selectedShape)
+            if playerPos and shapeTransform and shapeTransform.pos and 
+               playerPos.x and playerPos.y and playerPos.z and 
+               shapeTransform.pos.x and shapeTransform.pos.y and shapeTransform.pos.z then
+                local dx = shapeTransform.pos.x - playerPos.x
+                local dy = shapeTransform.pos.y - playerPos.y
+                local dz = shapeTransform.pos.z - playerPos.z
+                local distance = math.sqrt(dx*dx + dy*dy + dz*dz)
+                addLog("INFO", "Distance from Player: " .. string.format("%.2f", distance) .. " meters")
+            end
+        end
+    end
+
+    -- Object type info
+    if GetEntityType then
+        if selectedBody ~= 0 then
+            local entityType = GetEntityType(selectedBody)
+            addLog("INFO", "Entity Type: " .. entityType)
+        elseif selectedShape ~= 0 then
+            local entityType = GetEntityType(selectedShape)
+            addLog("INFO", "Entity Type: " .. entityType)
         end
     end
 
@@ -2266,7 +2487,7 @@ local options = {
     -- Key bindings
     toggleKey = {
         name = "Toggle Key",
-        value = "f7",
+        value = "home",
         type = "text",
         description = "Key to toggle console (grave, f1, etc.)"
     }
