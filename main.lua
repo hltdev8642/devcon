@@ -21,6 +21,15 @@ console = {
     fontSize = 20
 }
 
+-- Laser tool variables
+local laserTool = {
+    selectedBody = 0,
+    selectedShape = 0,
+    laserRange = 100.0,
+    laserColor = {1, 0, 0, 0.8}, -- Red laser
+    outlineColor = {1, 0, 0, 0.5} -- Semi-transparent red outline
+}
+
 -- Initialize the mod
 function init()
     -- Load API functions for completion
@@ -29,6 +38,13 @@ function init()
     loadOptions()
     -- Load previous session
     loadSession()
+    
+    -- Register the laser pointer tool
+    if RegisterTool then
+        RegisterTool("laserpointer", "Laser Pointer", "lasertool/laserpointer.vox")
+        SetBool("game.tool.laserpointer.enabled", true)
+    end
+    
     if DebugPrint then
         DebugPrint("Lua Console Overlay Mod initialized")
     end
@@ -105,6 +121,9 @@ function tick(dt)
         handleInput()
     end
 
+    -- Handle laser tool functionality
+    handleLaserTool(dt)
+
     -- Handle mouse wheel scrolling when console is visible
     if console.visible then
         local wheel = InputValue and InputValue("mousewheel") or 0
@@ -125,12 +144,78 @@ function draw()
     if console.visible then
         drawConsole()
     end
+    
+    -- Draw laser tool UI if needed
+    drawLaserTool()
+end
+
+-- Draw laser tool UI
+function drawLaserTool()
+    -- Tool UI could go here if needed
 end
 
 -- Handle input when console is active
 function handleInput()
     -- Input is now handled automatically by UiTextInput in drawConsole
     -- Special keys (Enter, Tab, arrows) are handled in tick()
+end
+
+-- Handle laser tool functionality
+function handleLaserTool(dt)
+    -- Only work when this tool is selected
+    if not GetString or GetString("game.player.tool") ~= "laserpointer" then
+        return
+    end
+
+    -- Get player camera transform
+    local cameraTransform = GetPlayerCameraTransform()
+    if not cameraTransform then return end
+    local cameraPos = cameraTransform.pos
+
+    -- Get camera forward direction (negative Z in camera space)
+    local cameraDir = TransformToParentVec(cameraTransform, Vec(0, 0, -1))
+
+    -- Perform raycast to find objects
+    local hit, dist, normal, shape = QueryRaycast(cameraPos, cameraDir, laserTool.laserRange)
+
+    if hit then
+        local hitPoint = VecAdd(cameraPos, VecScale(cameraDir, dist))
+
+        -- Draw laser beam
+        DrawLine(cameraPos, hitPoint, laserTool.laserColor[1], laserTool.laserColor[2], laserTool.laserColor[3], laserTool.laserColor[4])
+
+        -- Get the body that contains this shape
+        local body = GetShapeBody(shape)
+
+        -- Handle tool usage (click to select)
+        if InputPressed and InputPressed("usetool") then
+            -- Clear previous selection
+            if laserTool.selectedBody ~= 0 then
+                DrawBodyOutline(laserTool.selectedBody, 0) -- Remove outline
+            end
+
+            -- Select new object
+            laserTool.selectedBody = body
+            laserTool.selectedShape = shape
+
+            -- Store selection in registry for console access
+            SetInt("lasertool.selected_body", body)
+            SetInt("lasertool.selected_shape", shape)
+
+            -- Add red outline to selected body
+            DrawBodyOutline(body, laserTool.outlineColor[4])
+        end
+
+        -- Draw outline on currently aimed body
+        if body ~= laserTool.selectedBody then
+            DrawBodyOutline(body, laserTool.outlineColor[4])
+        end
+    end
+
+    -- Keep selected object outlined
+    if laserTool.selectedBody ~= 0 then
+        DrawBodyOutline(laserTool.selectedBody, laserTool.outlineColor[4])
+    end
 end
 
 -- Load API functions for command completion
@@ -703,6 +788,10 @@ function executeCommand(cmd)
         handleRegCommand(parts)
     elseif command == "lua" then
         executeLua(table.concat(parts, " ", 2))
+    elseif command == "dump" then
+        dumpSelectedObject()
+    elseif command == "exec" then
+        executeOnSelectedObject(table.concat(parts, " ", 2))
     else
         -- Try to execute as Lua code
         executeLua(cmd)
@@ -729,7 +818,11 @@ function showHelp()
     addLog("INFO", "reg set <key> <value> - Set registry value")
     addLog("INFO", "reg delete <key> - Delete registry key")
     addLog("INFO", "lua <code> - Execute Lua code")
+    addLog("INFO", "dump - Show debug info about selected object")
+    addLog("INFO", "exec <code> - Execute Lua code on selected object")
     addLog("INFO", "Or enter any Lua expression directly")
+    addLog("INFO", "")
+    addLog("INFO", "Use the Laser Pointer tool to select objects for dump/exec commands")
 end
 
 -- Handle registry commands
@@ -809,6 +902,145 @@ function executeLua(code)
         if success then
             if result ~= nil then
                 addLog("INFO", tostring(result))
+            end
+        else
+            addLog("ERROR", "Runtime error: " .. result)
+        end
+    else
+        addLog("ERROR", "Syntax error: " .. err)
+    end
+end
+
+-- Dump debug information about selected object
+function dumpSelectedObject()
+    local selectedBody = GetInt and GetInt("lasertool.selected_body") or 0
+    local selectedShape = GetInt and GetInt("lasertool.selected_shape") or 0
+
+    if selectedBody == 0 and selectedShape == 0 then
+        addLog("ERROR", "No object selected. Use the laser pointer tool to select an object first.")
+        return
+    end
+
+    addLog("INFO", "=== SELECTED OBJECT DEBUG INFO ===")
+
+    if selectedBody ~= 0 then
+        addLog("INFO", "Body Handle: " .. selectedBody)
+
+        if GetBodyTransform then
+            local transform = GetBodyTransform(selectedBody)
+            if transform and transform.pos then
+                addLog("INFO", "Body Position: (" .. (transform.pos.x or 0) .. ", " .. (transform.pos.y or 0) .. ", " .. (transform.pos.z or 0) .. ")")
+            end
+            if transform and transform.rot then
+                addLog("INFO", "Body Rotation: (" .. (transform.rot.x or 0) .. ", " .. (transform.rot.y or 0) .. ", " .. (transform.rot.z or 0) .. ", " .. (transform.rot.w or 0) .. ")")
+            end
+        end
+
+        if GetBodyMass then
+            local mass = GetBodyMass(selectedBody)
+            addLog("INFO", "Body Mass: " .. mass)
+        end
+
+        if IsBodyDynamic then
+            local isDynamic = IsBodyDynamic(selectedBody)
+            addLog("INFO", "Is Dynamic: " .. tostring(isDynamic))
+        end
+
+        if IsBodyActive then
+            local isActive = IsBodyActive(selectedBody)
+            addLog("INFO", "Is Active: " .. tostring(isActive))
+        end
+
+        if IsBodyBroken then
+            local isBroken = IsBodyBroken(selectedBody)
+            addLog("INFO", "Is Broken: " .. tostring(isBroken))
+        end
+
+        if GetBodyBounds then
+            local min, max = GetBodyBounds(selectedBody)
+            if min and max then
+                addLog("INFO", "Bounds Min: (" .. (min.x or 0) .. ", " .. (min.y or 0) .. ", " .. (min.z or 0) .. ")")
+                addLog("INFO", "Bounds Max: (" .. (max.x or 0) .. ", " .. (max.y or 0) .. ", " .. (max.z or 0) .. ")")
+            end
+        end
+    end
+
+    if selectedShape ~= 0 then
+        addLog("INFO", "Shape Handle: " .. selectedShape)
+
+        if GetShapeWorldTransform then
+            local transform = GetShapeWorldTransform(selectedShape)
+            if transform and transform.pos then
+                addLog("INFO", "Shape Position: (" .. (transform.pos.x or 0) .. ", " .. (transform.pos.y or 0) .. ", " .. (transform.pos.z or 0) .. ")")
+            end
+            if transform and transform.rot then
+                addLog("INFO", "Shape Rotation: (" .. (transform.rot.x or 0) .. ", " .. (transform.rot.y or 0) .. ", " .. (transform.rot.z or 0) .. ", " .. (transform.rot.w or 0) .. ")")
+            end
+        end
+
+        if GetShapeSize then
+            local size = GetShapeSize(selectedShape)
+            if type(size) == "table" and size.x and size.y and size.z then
+                addLog("INFO", "Shape Size: " .. size.x .. "x" .. size.y .. "x" .. size.z)
+            elseif type(size) == "number" then
+                addLog("INFO", "Shape Size: " .. size)
+            else
+                addLog("INFO", "Shape Size: " .. tostring(size))
+            end
+        end
+
+        if GetShapeMaterialAtIndex then
+            local mat = GetShapeMaterialAtIndex(selectedShape, 0, 0, 0)
+            addLog("INFO", "Primary Material: " .. mat)
+        end
+
+        if IsShapeBroken then
+            local isBroken = IsShapeBroken(selectedShape)
+            addLog("INFO", "Shape Is Broken: " .. tostring(isBroken))
+        end
+    end
+
+    addLog("INFO", "=== END DEBUG INFO ===")
+end
+
+-- Execute Lua code on selected object
+function executeOnSelectedObject(code)
+    local selectedBody = GetInt and GetInt("lasertool.selected_body") or 0
+    local selectedShape = GetInt and GetInt("lasertool.selected_shape") or 0
+
+    if selectedBody == 0 and selectedShape == 0 then
+        addLog("ERROR", "No object selected. Use the laser pointer tool to select an object first.")
+        return
+    end
+
+    if code == "" then
+        addLog("ERROR", "Usage: exec <lua_code>")
+        addLog("INFO", "Example: exec SetBodyVelocity(body, Vec(0, 10, 0))")
+        return
+    end
+
+    -- Create a safe environment with selected object variables
+    local env = {}
+    for k, v in pairs(_G) do
+        env[k] = v
+    end
+
+    -- Add selected object variables to environment
+    env.body = selectedBody
+    env.shape = selectedShape
+    env.selectedBody = selectedBody
+    env.selectedShape = selectedShape
+
+    -- Set the environment for the code
+    local func, err = loadstring(code)
+    if func then
+        setfenv(func, env)
+        local success, result = pcall(func)
+        if success then
+            if result ~= nil then
+                addLog("INFO", "Result: " .. tostring(result))
+            else
+                addLog("INFO", "Code executed successfully")
             end
         else
             addLog("ERROR", "Runtime error: " .. result)

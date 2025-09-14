@@ -1,6 +1,6 @@
 # Lua Console Overlay Mod for Teardown
 
-A comprehensive interactive console overlay for Teardown that provides debugging, scripting, and registry management capabilities.
+A comprehensive interactive console overlay for Teardown that provides debugging, scripting, and registry management capabilities, now enhanced with laser pointer tool integration.
 
 ## Features
 
@@ -12,6 +12,7 @@ A comprehensive interactive console overlay for Teardown that provides debugging
 - **Log Output**: Display console output with timestamps
 - **Configurable Settings**: Customize appearance and behavior
 - **Session Persistence**: Save and restore console state between sessions
+- **Laser Tool Integration**: Select objects with laser pointer and interact via console commands
 
 ## Installation
 
@@ -23,6 +24,8 @@ A comprehensive interactive console overlay for Teardown that provides debugging
 3. Ensure the following files are present:
    - `info.txt` - Mod metadata
    - `main.lua` - Main mod script (includes embedded options)
+   - `lasertool/` - Laser pointer tool folder
+4. Launch Teardown and enable both mods
 
 ## Usage
 
@@ -51,6 +54,10 @@ A comprehensive interactive console overlay for Teardown that provides debugging
 - `lua <code>` - Execute Lua code
 - Or simply enter any Lua expression directly
 
+#### Laser Tool Commands
+- `dump` - Show debug information about selected object
+- `exec <code>` - Execute Lua code on selected object
+
 ### Examples
 
 ```lua
@@ -68,7 +75,43 @@ lua print("Hello from console!")
 
 -- Direct Lua execution
 Vec(1, 2, 3)
+
+-- Laser tool examples (after selecting an object)
+dump
+exec print("Selected body:", selectedBody)
+exec SetBodyTransform(selectedBody, Transform(Vec(0, 10, 0)))
 ```
+
+## Laser Tool Integration
+
+### Using the Laser Tool
+
+1. Select the "Laser Pointer" tool from your inventory
+2. Aim at objects - you'll see a red laser beam
+3. Click to select objects - they'll be outlined in red
+4. Use console commands to interact with selected objects
+
+### Laser Tool Commands
+
+#### dump
+Displays comprehensive debug information about the selected object:
+- Body handle and transform data
+- Shape handle and world transform
+- Material and physical properties
+- Joint and constraint information
+
+#### exec <lua_code>
+Executes Lua code on the selected object in a safe environment with access to:
+- `selectedBody` - Handle of selected body
+- `selectedShape` - Handle of selected shape
+- All Teardown API functions
+- Standard Lua libraries
+
+**Safe Environment Features:**
+- Restricted global access for security
+- Automatic error handling and reporting
+- Access to selected object handles
+- Full Teardown API availability
 
 ## Configuration
 

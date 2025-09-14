@@ -1,0 +1,4 @@
+name=Laser Pointer Tool
+author=GitHub Copilot
+description=A laser pointer tool for selecting objects to inspect in the console
+tags=tool,utility,debug
