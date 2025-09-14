@@ -82,9 +82,24 @@ function tick(dt)
                 else
                     -- Find new matches
                     local matches = {}
-                    for _, func in ipairs(console.apiFunctions) do
-                        if func:lower():find(console.input:lower(), 1, true) == 1 then
-                            table.insert(matches, func)
+                    local searchText = console.input
+                    local apiList = console.apiFunctions
+
+                    -- Check if this is an exec command
+                    if console.input:lower():find("^exec ") then
+                        -- For exec commands, complete from the code part after "exec "
+                        -- but use the full API list for maximum flexibility
+                        searchText = console.input:sub(6) -- Remove "exec " prefix
+                        apiList = console.apiFunctions -- Use full API for exec commands
+                    end
+
+                    for _, func in ipairs(apiList) do
+                        if func:lower():find(searchText:lower(), 1, true) == 1 then
+                            if console.input:lower():find("^exec ") then
+                                table.insert(matches, "exec " .. func)
+                            else
+                                table.insert(matches, func)
+                            end
                         end
                     end
                     if #matches == 1 then
@@ -823,6 +838,7 @@ function showHelp()
     addLog("INFO", "Or enter any Lua expression directly")
     addLog("INFO", "")
     addLog("INFO", "Use the Laser Pointer tool to select objects for dump/exec commands")
+    addLog("INFO", "Use Tab for autocompletion - exec commands show object manipulation functions")
 end
 
 -- Handle registry commands
