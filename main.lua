@@ -8,9 +8,13 @@ console = {
     cursor = 0,
     history = {},
     historyIndex = 0,
+    persistentHistory = {}, -- New: persistent command history across sessions
+    maxPersistentHistory = 100, -- Maximum number of persistent commands to store
     logs = {},
     maxLogs = 1000,
     scroll = 0,
+    logFilter = "", -- New: filter for log display
+    logSearchMode = false, -- New: whether we're in search mode
     apiFunctions = {},
     apiSignatures = {}, -- New: function signatures with parameters
     completionMatches = nil,
@@ -58,6 +62,8 @@ function init()
     loadScripts()
     -- Load keyboard shortcuts
     loadShortcuts()
+    -- Load persistent command history
+    loadPersistentHistory()
     
     -- Register the laser pointer tool
     if RegisterTool then
@@ -166,14 +172,22 @@ function tick(dt)
                 if console.historyIndex > 0 then
                     console.input = console.history[#console.history - console.historyIndex + 1]
                 end
+            elseif #console.persistentHistory > 0 then
+                -- If no session history, use persistent history
+                console.historyIndex = math.min(#console.persistentHistory, console.historyIndex + 1)
+                if console.historyIndex > 0 then
+                    console.input = console.persistentHistory[#console.persistentHistory - console.historyIndex + 1]
+                end
             end
         elseif InputPressed and InputPressed("downarrow") then
             if console.historyIndex > 0 then
                 console.historyIndex = console.historyIndex - 1
                 if console.historyIndex == 0 then
                     console.input = ""
-                else
+                elseif #console.history > 0 and console.historyIndex <= #console.history then
                     console.input = console.history[#console.history - console.historyIndex + 1]
+                elseif #console.persistentHistory > 0 then
+                    console.input = console.persistentHistory[#console.persistentHistory - console.historyIndex + 1]
                 end
             end
         end
@@ -1943,6 +1957,17 @@ function executeCommand(cmd)
         cmd = tostring(cmd or "")
     end
 
+    -- Add command to persistent history (avoid duplicates)
+    if not has_value(console.persistentHistory, cmd) then
+        table.insert(console.persistentHistory, cmd)
+        -- Keep only the most recent commands
+        if #console.persistentHistory > console.maxPersistentHistory then
+            table.remove(console.persistentHistory, 1)
+        end
+        -- Save persistent history
+        savePersistentHistory()
+    end
+
     -- Add command to logs
     addLog("INFO", "> " .. cmd)
 
@@ -1988,6 +2013,22 @@ function executeCommand(cmd)
         handleShortcutsCommand(table.concat(parts, " ", 2))
     elseif command == "font" then
         handleFontCommand(table.concat(parts, " ", 2))
+    elseif command == "filter" then
+        handleFilterCommand(table.concat(parts, " ", 2))
+    elseif command == "filterclear" then
+        console.logFilter = ""
+        console.logSearchMode = false
+        addLog("INFO", "Log filter cleared")
+    elseif command == "filterstatus" then
+        if console.logFilter == "" then
+            addLog("INFO", "No active log filter")
+        else
+            local mode = console.logSearchMode and "SEARCH" or "LEVEL"
+            addLog("INFO", "Active filter: " .. mode .. " '" .. console.logFilter .. "'")
+        end
+    elseif command == "toggle" then
+        console.visible = not console.visible
+        addLog("INFO", "Console " .. (console.visible and "shown" or "hidden"))
     else
         -- Try to execute as Lua code
         executeLua(cmd)
@@ -2025,6 +2066,10 @@ function showHelp()
     addLog("INFO", "physics <forces|collisions|performance|gravity|reset> - Physics debugging tools")
     addLog("INFO", "shortcuts <list|set|remove|reset> - Manage keyboard shortcuts")
     addLog("INFO", "font <size|list|set|current|reset> - Customize font settings")
+    addLog("INFO", "filter <text|level|clear> - Filter console logs")
+    addLog("INFO", "filterclear - Clear active log filter")
+    addLog("INFO", "filterstatus - Show current filter status")
+    addLog("INFO", "toggle - Toggle console visibility")
     addLog("INFO", "script save <name> <code> - Save a script")
     addLog("INFO", "script load <name> - Load a script into input")
     addLog("INFO", "script list - List saved scripts")
@@ -3697,6 +3742,32 @@ function loadShortcuts()
     end
 end
 
+-- Load persistent command history
+function loadPersistentHistory()
+    if not JsonDecode or not GetString then
+        console.persistentHistory = {}
+        return
+    end
+
+    local historyData = GetString("savegame.mod.console.persistent_history")
+    if historyData then
+        local success, history = pcall(JsonDecode, historyData)
+        if success and history then
+            console.persistentHistory = history
+        else
+            console.persistentHistory = {}
+        end
+    else
+        console.persistentHistory = {}
+    end
+end
+
+-- Save persistent command history
+function savePersistentHistory()
+    if not JsonEncode or not SetString then return end
+    SetString("savegame.mod.console.persistent_history", JsonEncode(console.persistentHistory))
+end
+
 -- Handle font customization command
 function handleFontCommand(args)
     if not args or args == "" then
@@ -3755,6 +3826,57 @@ function handleFontCommand(args)
     else
         addLog("ERROR", "Unknown font subcommand: " .. subcmd)
         showFontHelp()
+    end
+end
+
+-- Handle log filtering command
+function handleFilterCommand(args)
+    if not args or args == "" then
+        -- Clear filter
+        console.logFilter = ""
+        console.logSearchMode = false
+        addLog("INFO", "Log filter cleared")
+        return
+    end
+
+    local parts = {}
+    for part in args:gmatch("%S+") do
+        table.insert(parts, part)
+    end
+
+    local subcmd = parts[1]:lower()
+
+    if subcmd == "clear" then
+        console.logFilter = ""
+        console.logSearchMode = false
+        addLog("INFO", "Log filter cleared")
+    elseif subcmd == "search" then
+        if #parts < 2 then
+            addLog("ERROR", "Usage: filter search <text>")
+            return
+        end
+        console.logFilter = table.concat(parts, " ", 2)
+        console.logSearchMode = true
+        addLog("INFO", "Log search filter set to: '" .. console.logFilter .. "'")
+        addLog("INFO", "Showing only logs containing: " .. console.logFilter)
+    elseif subcmd == "level" then
+        if #parts < 2 then
+            addLog("ERROR", "Usage: filter level <INFO|ERROR|WARN>")
+            return
+        end
+        local level = parts[2]:upper()
+        if level == "INFO" or level == "ERROR" or level == "WARN" then
+            console.logFilter = level
+            console.logSearchMode = false
+            addLog("INFO", "Log level filter set to: " .. level)
+        else
+            addLog("ERROR", "Invalid log level. Use: INFO, ERROR, or WARN")
+        end
+    else
+        -- Default: treat as search text
+        console.logFilter = args
+        console.logSearchMode = true
+        addLog("INFO", "Log search filter set to: '" .. console.logFilter .. "'")
     end
 end
 
@@ -4299,9 +4421,29 @@ function drawConsole()
         UiColor(1, 1, 1, 1)
         local y = 0
         local maxLines = math.floor((console.height - 60) / (console.fontSize + 2))
-        local startLine = math.max(1, #console.logs - maxLines - console.scroll)
-        for i = startLine, #console.logs do
-            UiText(console.logs[i])
+        
+        -- Filter logs if filter is active
+        local displayLogs = console.logs
+        if console.logFilter ~= "" then
+            displayLogs = {}
+            for _, log in ipairs(console.logs) do
+                local shouldInclude = false
+                if console.logSearchMode then
+                    -- Search mode: check if log contains the filter text
+                    shouldInclude = log:lower():find(console.logFilter:lower(), 1, true) ~= nil
+                else
+                    -- Level mode: check if log starts with the level
+                    shouldInclude = log:find("%[" .. console.logFilter .. "%]") ~= nil
+                end
+                if shouldInclude then
+                    table.insert(displayLogs, log)
+                end
+            end
+        end
+        
+        local startLine = math.max(1, #displayLogs - maxLines - console.scroll)
+        for i = startLine, #displayLogs do
+            UiText(displayLogs[i])
             UiTranslate(0, console.fontSize + 2)
             y = y + console.fontSize + 2
             if y > console.height - 60 then break end
@@ -4317,9 +4459,25 @@ function drawConsole()
             -- Draw the prompt
             UiText("> ")
             
+            -- Show filter status if active
+            if console.logFilter ~= "" then
+                local filterText = console.logSearchMode and 
+                    (" [SEARCH: " .. console.logFilter .. "]") or 
+                    (" [LEVEL: " .. console.logFilter .. "]")
+                UiColor(1, 1, 0, 1) -- Yellow for filter indicator
+                UiText(filterText)
+                UiColor(1, 1, 1, 1) -- Back to white
+            end
+            
             -- Use UiTextInput for automatic text input handling
             if UiTextInput then
                 local promptWidth = UiGetTextWidth and UiGetTextWidth("> ") or (2 * console.fontSize * 0.6)
+                if console.logFilter ~= "" then
+                    local filterWidth = UiGetTextWidth and UiGetTextWidth(
+                        console.logSearchMode and (" [SEARCH: " .. console.logFilter .. "]") or (" [LEVEL: " .. console.logFilter .. "]")
+                    ) or 0
+                    promptWidth = promptWidth + filterWidth
+                end
                 UiTranslate(promptWidth-10, -16) -- Position after the prompt, adjusted for vertical alignment
                 local inputWidth = console.width - 20 - promptWidth
                 local inputHeight = console.fontSize + 4
